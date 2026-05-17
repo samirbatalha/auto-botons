@@ -108,7 +108,7 @@ function autoBotons() {
         fd.append('level', 'balanced');
 
         const res = await fetch(`${API}/api/process`, { method: 'POST', body: fd });
-        if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await this.extractError(res));
         const newImages = await res.json();
         this.images = [...this.images, ...newImages];
       } catch (e) {
@@ -117,6 +117,20 @@ function autoBotons() {
         this.loading = false;
         this.loadingMsg = '';
       }
+    },
+
+    async extractError(res) {
+      const ctype = res.headers.get('content-type') || '';
+      if (ctype.includes('application/json')) {
+        try {
+          const j = await res.json();
+          return j.detail || j.error || JSON.stringify(j);
+        } catch (_) { /* fallthrough */ }
+      }
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        return `Servidor indisponível (HTTP ${res.status}) — tente novamente em alguns segundos`;
+      }
+      return `Erro do servidor (HTTP ${res.status})`;
     },
 
     async compressImage(file, maxSide, quality) {
@@ -220,7 +234,7 @@ function autoBotons() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_id: sourceId, crop }),
         });
-        if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await this.extractError(res));
         const updated = await res.json();
         const bust = `?t=${Date.now()}`;
         this.images = this.images.map((i) =>
@@ -250,7 +264,7 @@ function autoBotons() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ button_size: this.selectedSize, image_ids: ids }),
         });
-        if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await this.extractError(res));
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
