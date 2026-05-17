@@ -1,0 +1,30 @@
+[x-cloak] { display: none !important; }
+
+/* Cropper.js: forçar formato circular no preview */
+.cropper-view-box,
+.cropper-face {
+  border-radius: 50%;
+}
+
+.cropper-view-box {
+  outline: 2px solid rgba(99, 102, 241, 0.9);
+  outline-color: rgba(99, 102, 241, 0.9);
+}
+
+/* Esconde linhas/handles laterais para reforçar a sensação circular */
+.cropper-line, .cropper-point.point-n, .cropper-point.point-s,
+.cropper-point.point-w, .cropper-point.point-e {
+  display: none;
+}
+.cropper-point {
+  background-color: #818cf8;
+  width: 12px;
+  height: 12px;
+}
+
+/* Suaviza tap em mobile */
+button { -webkit-tap-highlight-color: transparent; }
+
+/* Respeita safe areas iOS */
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+footer { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }

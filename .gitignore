@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+.tmp_uploads/
+backend/.tmp_uploads/
+scripts/_out/
+.playwright-mcp/
+ui-*.png
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

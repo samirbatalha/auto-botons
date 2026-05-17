@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Auto Botons — Gerador de PDF para impressão</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+  <script defer src="/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased">
+  <div x-data="autoBotons()" x-init="init()" class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-32">
+
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Auto Botons</h1>
+        <p class="text-sm text-slate-400">Gerador de PDF para impressão de botons</p>
+      </div>
+      <button @click="installPrompt && installPrompt.prompt()"
+              x-show="installPrompt"
+              class="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700">
+        Instalar app
+      </button>
+    </header>
+
+    <!-- Seletor de tamanho -->
+    <section class="mb-6">
+      <p class="text-sm text-slate-400 mb-2">Tamanho do boton</p>
+      <div class="flex gap-2">
+        <template x-for="size in sizes" :key="size">
+          <button @click="selectSize(size)"
+                  :class="selectedSize === size
+                    ? 'bg-indigo-500 border-indigo-400 text-white'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'"
+                  class="flex-1 sm:flex-none px-5 py-3 rounded-xl border font-semibold transition">
+            <span x-text="size + 'mm'"></span>
+          </button>
+        </template>
+      </div>
+      <p x-show="selectedSpec" class="text-xs text-slate-400 mt-2"
+         x-text="`${selectedSpec?.cols}×${selectedSpec?.rows} = ${selectedSpec?.slots_per_page} botões por folha A4`"></p>
+    </section>
+
+    <!-- Drop zone -->
+    <section
+      @dragover.prevent="dragActive = true"
+      @dragleave.prevent="dragActive = false"
+      @drop.prevent="handleDrop($event)"
+      :class="dragActive ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-700 bg-slate-900/60'"
+      class="border-2 border-dashed rounded-2xl p-6 sm:p-10 text-center cursor-pointer transition mb-6"
+      @click="$refs.fileInput.click()">
+
+      <input type="file" x-ref="fileInput" multiple accept="image/*"
+             class="hidden" @change="handleFiles($event.target.files)" capture="environment" />
+
+      <svg class="mx-auto w-12 h-12 text-slate-500 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+      </svg>
+      <p class="font-medium">Arraste fotos aqui ou toque para escolher</p>
+      <p class="text-xs text-slate-400 mt-1">Várias imagens de uma vez. JPG, PNG, WebP</p>
+    </section>
+
+    <!-- Loading -->
+    <div x-show="loading" class="mb-6 flex items-center gap-3 text-sm text-indigo-300">
+      <div class="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
+      <span x-text="loadingMsg"></span>
+    </div>
+
+    <!-- Erro -->
+    <div x-show="error" x-text="error"
+         class="mb-6 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-200 text-sm"></div>
+
+    <!-- Contador -->
+    <div x-show="images.length > 0" class="flex items-center justify-between mb-4">
+      <p class="text-sm text-slate-300">
+        <span class="font-semibold text-white" x-text="images.length"></span> <span x-text="images.length === 1 ? 'imagem' : 'imagens'"></span> ·
+        <span x-text="pageCountText"></span>
+      </p>
+      <button @click="clearAll()" class="text-xs text-slate-400 hover:text-red-400">Limpar tudo</button>
+    </div>
+
+    <!-- Grid de previews -->
+    <section x-show="images.length > 0"
+             class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      <template x-for="(img, idx) in images" :key="img.id">
+        <div class="group relative aspect-square">
+          <img :src="img.preview_url" :alt="img.original_name"
+               class="w-full h-full object-cover rounded-full ring-2 ring-slate-700 bg-slate-800" />
+          <div class="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition
+                      bg-black/60 flex items-center justify-center gap-1 sm:gap-2">
+            <button @click="openCropper(img)" title="Ajustar crop"
+                    class="p-2 rounded-full bg-white/15 hover:bg-white/30">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487a2.06 2.06 0 1 1 2.915 2.915L7.5 19.679 3 21l1.32-4.5L16.862 4.487Z"/>
+              </svg>
+            </button>
+            <button @click="duplicate(img)" title="Duplicar"
+                    class="p-2 rounded-full bg-white/15 hover:bg-white/30">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375A1.125 1.125 0 0 1 14.625 21.75h-9.75A1.125 1.125 0 0 1 3.75 20.625v-9.75A1.125 1.125 0 0 1 4.875 9.75H8.25M9.375 4.5h9.75c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-9.75A1.125 1.125 0 0 1 8.25 15.375v-9.75c0-.621.504-1.125 1.125-1.125Z"/>
+              </svg>
+            </button>
+            <button @click="removeImage(img.id)" title="Remover"
+                    class="p-2 rounded-full bg-red-500/30 hover:bg-red-500/60">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/>
+              </svg>
+            </button>
+          </div>
+          <span class="absolute -top-1 -left-1 bg-slate-900 text-slate-300 text-xs px-1.5 py-0.5 rounded-full ring-1 ring-slate-700"
+                x-text="idx + 1"></span>
+        </div>
+      </template>
+    </section>
+
+    <!-- Modal Cropper.js -->
+    <div x-show="cropperOpen" x-cloak
+         class="fixed inset-0 z-50 bg-black/80 flex flex-col"
+         @click.self="closeCropper()">
+      <div class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+        <h2 class="font-semibold">Ajustar recorte</h2>
+        <div class="flex gap-2">
+          <button @click="closeCropper()" class="text-sm text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-800">Cancelar</button>
+          <button @click="applyCrop()" class="text-sm bg-indigo-500 text-white px-4 py-1.5 rounded-lg hover:bg-indigo-400 font-medium">Aplicar</button>
+        </div>
+      </div>
+      <div class="flex-1 flex items-center justify-center p-4 overflow-hidden bg-black">
+        <img x-ref="cropperImg" class="max-w-full max-h-full" alt="Editor" />
+      </div>
+      <div class="bg-slate-900 border-t border-slate-800 px-4 py-3 text-xs text-slate-400 text-center">
+        Arraste a área circular para reposicionar · use o pinch / scroll para zoom
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Barra fixa: gerar PDF -->
+  <footer x-data="autoBotonsFooter()" x-show="$store.app.images.length > 0"
+          class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-800
+                 px-4 py-3 sm:py-4 z-40">
+    <div class="max-w-5xl mx-auto flex items-center gap-3">
+      <p class="hidden sm:block text-xs text-slate-400 flex-1">
+        Imprimir em escala 100% (sem ajustar à página)
+      </p>
+      <button @click="$store.app.generatePdf()"
+              :disabled="$store.app.loading"
+              class="flex-1 sm:flex-none bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50
+                     text-white font-semibold px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/20">
+        <span x-show="!$store.app.loading">Gerar PDF</span>
+        <span x-show="$store.app.loading">Gerando...</span>
+      </button>
+    </div>
+  </footer>
+</body>
+</html>
