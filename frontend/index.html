@@ -58,7 +58,7 @@
       @click="$refs.fileInput.click()">
 
       <input type="file" x-ref="fileInput" multiple accept="image/*"
-             class="hidden" @change="handleFiles($event.target.files)" capture="environment" />
+             class="hidden" @change="handleFiles($event.target.files)" />
 
       <svg class="mx-auto w-12 h-12 text-slate-500 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round"
