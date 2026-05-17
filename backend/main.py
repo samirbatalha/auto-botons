@@ -10,7 +10,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
+from PIL import Image, ImageOps
+
+MAX_INPUT_SIDE_PX = 1800
 
 from . import storage
 from .config import BUTTON_SIZES
@@ -63,20 +65,29 @@ async def process_images(
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
 
     results: list[ProcessedImage] = []
+    errors: list[str] = []
     for f in files:
         raw = await f.read()
         if not raw:
             continue
         try:
             img = Image.open(BytesIO(raw))
-            img.load()
-        except Exception:
-            raise HTTPException(status_code=400, detail=f"Arquivo inválido: {f.filename}")
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((MAX_INPUT_SIDE_PX, MAX_INPUT_SIDE_PX), Image.LANCZOS)
+        except Exception as e:
+            errors.append(f"{f.filename}: arquivo inválido ({e})")
+            continue
 
-        enhanced = upscale.enhance_image(img, provider="classic", level=level)
-        circular = circle_crop.auto(enhanced)
-        entry = storage.save(raw, f.filename or "imagem", circular)
+        try:
+            enhanced = upscale.enhance_image(img, provider="classic", level=level)
+            circular = circle_crop.auto(enhanced)
+        except Exception as e:
+            errors.append(f"{f.filename}: falha no processamento ({type(e).__name__}: {e})")
+            continue
 
+        normalized_buf = BytesIO()
+        img.convert("RGB").save(normalized_buf, format="JPEG", quality=92)
+        entry = storage.save(normalized_buf.getvalue(), f.filename or "imagem.jpg", circular)
         results.append(
             ProcessedImage(
                 id=entry.image_id,
@@ -86,6 +97,9 @@ async def process_images(
                 height=entry.height,
             )
         )
+
+    if not results and errors:
+        raise HTTPException(status_code=500, detail="; ".join(errors))
     return results
 
 
@@ -112,8 +126,15 @@ def recrop(req: RecropRequest) -> ProcessedImage:
     if img is None:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
 
-    enhanced = upscale.enhance_image(img, provider="classic")
-    recropped = circle_crop.manual(enhanced, req.crop)
+    img = ImageOps.exif_transpose(img)
+    img.thumbnail((MAX_INPUT_SIDE_PX, MAX_INPUT_SIDE_PX), Image.LANCZOS)
+
+    try:
+        enhanced = upscale.enhance_image(img, provider="classic")
+        recropped = circle_crop.manual(enhanced, req.crop)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha no recorte ({type(e).__name__}: {e})")
+
     entry = storage.update_processed(req.image_id, recropped)
     if entry is None:
         raise HTTPException(status_code=404, detail="Imagem não encontrada")

@@ -92,13 +92,21 @@ function autoBotons() {
 
       this.error = '';
       this.loading = true;
-      this.loadingMsg = `Processando ${files.length} imagem${files.length > 1 ? 'ns' : ''}...`;
-
-      const fd = new FormData();
-      files.forEach((f) => fd.append('files', f));
-      fd.append('level', 'balanced');
+      this.loadingMsg = `Preparando ${files.length} imagem${files.length > 1 ? 'ns' : ''}...`;
 
       try {
+        const compressed = [];
+        for (let i = 0; i < files.length; i++) {
+          this.loadingMsg = `Preparando imagem ${i + 1} de ${files.length}...`;
+          const blob = await this.compressImage(files[i], 1800, 0.9);
+          compressed.push(new File([blob], files[i].name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        }
+
+        this.loadingMsg = `Processando ${files.length} imagem${files.length > 1 ? 'ns' : ''}...`;
+        const fd = new FormData();
+        compressed.forEach((f) => fd.append('files', f));
+        fd.append('level', 'balanced');
+
         const res = await fetch(`${API}/api/process`, { method: 'POST', body: fd });
         if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
         const newImages = await res.json();
@@ -109,6 +117,30 @@ function autoBotons() {
         this.loading = false;
         this.loadingMsg = '';
       }
+    },
+
+    async compressImage(file, maxSide, quality) {
+      const bitmap = await createImageBitmap(file).catch(async () => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = url;
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+        URL.revokeObjectURL(url);
+        return img;
+      });
+      const w0 = bitmap.width || bitmap.naturalWidth;
+      const h0 = bitmap.height || bitmap.naturalHeight;
+      const scale = Math.min(1, maxSide / Math.max(w0, h0));
+      const w = Math.round(w0 * scale);
+      const h = Math.round(h0 * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      if (bitmap.close) bitmap.close();
+
+      return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
     },
 
     async removeImage(id) {

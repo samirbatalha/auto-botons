@@ -1,5 +1,5 @@
 /* Service worker simples: cacheia o shell, network-first para o resto */
-const CACHE = 'auto-botons-v1';
+const CACHE = 'auto-botons-v2';
 const SHELL = ['/', '/index.html', '/app.js', '/styles.css', '/manifest.json'];
 
 self.addEventListener('install', (e) => {

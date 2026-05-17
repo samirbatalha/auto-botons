@@ -32,7 +32,7 @@ def _auto_white_balance(arr: np.ndarray) -> np.ndarray:
 
 
 def _denoise(arr: np.ndarray) -> np.ndarray:
-    return cv2.fastNlMeansDenoisingColored(arr, None, h=4, hColor=4, templateWindowSize=7, searchWindowSize=21)
+    return cv2.fastNlMeansDenoisingColored(arr, None, h=3, hColor=3, templateWindowSize=5, searchWindowSize=11)
 
 
 def apply(img: Image.Image, level: str = "balanced") -> Image.Image:
