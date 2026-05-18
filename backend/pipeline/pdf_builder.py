@@ -50,8 +50,8 @@ def _slot_positions(spec: ButtonSpec) -> list[tuple[float, float]]:
     return positions
 
 
-def _draw_slot_marks(c: canvas.Canvas, cx_mm: float, cy_mm: float, spec: ButtonSpec) -> None:
-    """Desenha círculo externo (sólido), interno (tracejado) e cruz central."""
+def _draw_slot_marks(c: canvas.Canvas, cx_mm: float, cy_mm: float, spec: ButtonSpec, draw_cross: bool = True) -> None:
+    """Desenha círculo externo (sólido = corte), interno (tracejado = dobra) e opcionalmente a cruz central."""
     cx, cy = cx_mm * mm, cy_mm * mm
 
     c.setStrokeColor(LINE_COLOR)
@@ -63,10 +63,11 @@ def _draw_slot_marks(c: canvas.Canvas, cx_mm: float, cy_mm: float, spec: ButtonS
     c.circle(cx, cy, (spec.visible_mm / 2) * mm, stroke=1, fill=0)
     c.setDash()
 
-    cross = 2 * mm
-    c.setLineWidth(0.3)
-    c.line(cx - cross, cy, cx + cross, cy)
-    c.line(cx, cy - cross, cx, cy + cross)
+    if draw_cross:
+        cross = 2 * mm
+        c.setLineWidth(0.3)
+        c.line(cx - cross, cy, cx + cross, cy)
+        c.line(cx, cy - cross, cx, cy + cross)
 
 
 def _draw_image_in_slot(c: canvas.Canvas, img: Image.Image, cx_mm: float, cy_mm: float, spec: ButtonSpec) -> None:
@@ -138,9 +139,10 @@ def build(images: list[Image.Image], button_size: str, out_path: Path) -> Path:
         page_images = images[page_idx * per_page : (page_idx + 1) * per_page]
 
         for slot_idx, (cx_mm, cy_mm) in enumerate(positions):
-            if slot_idx < len(page_images):
+            has_image = slot_idx < len(page_images)
+            if has_image:
                 _draw_image_in_slot(c, page_images[slot_idx], cx_mm, cy_mm, spec)
-            _draw_slot_marks(c, cx_mm, cy_mm, spec)
+            _draw_slot_marks(c, cx_mm, cy_mm, spec, draw_cross=not has_image)
 
         c.showPage()
 
