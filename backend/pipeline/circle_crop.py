@@ -1,46 +1,24 @@
-"""Recorte circular com detecção de rosto (auto) e versão manual."""
+"""Recorte circular puro em Pillow — sem OpenCV, sem detecção de rosto.
+
+Posicionamento fino é feito pelo Cropper.js no frontend (modal de ajuste manual).
+"""
 from __future__ import annotations
 
-import cv2
-import numpy as np
 from PIL import Image, ImageDraw
 
 from ..models.schemas import CropParams
 
-_FACE_CASCADE: cv2.CascadeClassifier | None = None
 
-
-def _face_cascade() -> cv2.CascadeClassifier:
-    global _FACE_CASCADE
-    if _FACE_CASCADE is None:
-        path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        _FACE_CASCADE = cv2.CascadeClassifier(path)
-    return _FACE_CASCADE
-
-
-def _detect_face_center(img: Image.Image) -> tuple[int, int] | None:
-    """Retorna (cx, cy) do maior rosto encontrado, ou None."""
-    gray = cv2.cvtColor(np.array(img.convert("RGB")), cv2.COLOR_RGB2GRAY)
-    faces = _face_cascade().detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(48, 48))
-    if len(faces) == 0:
-        return None
-    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-    return x + w // 2, y + h // 2
-
-
-def _square_around(img: Image.Image, cx: int, cy: int) -> Image.Image:
-    """Recorta o maior quadrado possível ao redor de (cx, cy)."""
+def _square_center(img: Image.Image) -> Image.Image:
     w, h = img.size
     side = min(w, h)
-    half = side // 2
-
-    left = max(0, min(cx - half, w - side))
-    top = max(0, min(cy - half, h - side))
+    left = (w - side) // 2
+    top = (h - side) // 2
     return img.crop((left, top, left + side, top + side))
 
 
 def _apply_circle_mask(square: Image.Image) -> Image.Image:
-    """Recebe imagem quadrada, devolve PNG com máscara circular anti-aliased."""
+    """Aplica máscara circular anti-aliased usando supersampling."""
     size = square.size[0]
     scale = 4
     big = size * scale
@@ -54,21 +32,16 @@ def _apply_circle_mask(square: Image.Image) -> Image.Image:
 
 
 def auto(img: Image.Image, target_size_px: int | None = None) -> Image.Image:
-    """Recorte automático: centra no rosto se houver, senão no centro geométrico."""
+    """Crop centrado + máscara circular. Ajuste fino é via crop manual no frontend."""
     rgb = img.convert("RGB")
-    center = _detect_face_center(rgb)
-    if center is None:
-        w, h = rgb.size
-        center = (w // 2, h // 2)
-
-    square = _square_around(rgb, *center)
+    square = _square_center(rgb)
     if target_size_px and square.size[0] != target_size_px:
         square = square.resize((target_size_px, target_size_px), Image.LANCZOS)
     return _apply_circle_mask(square)
 
 
 def manual(img: Image.Image, params: CropParams, target_size_px: int | None = None) -> Image.Image:
-    """Aplica crop manual vindo do Cropper.js (coords normalizadas)."""
+    """Aplica crop manual vindo do Cropper.js (coords normalizadas 0..1)."""
     rgb = img.convert("RGB")
     w, h = rgb.size
     side_px = int(round(params.size * min(w, h)))

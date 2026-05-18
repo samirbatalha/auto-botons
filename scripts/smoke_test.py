@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
-from backend.pipeline import circle_crop, pdf_builder, upscale  # noqa: E402
+from backend.pipeline import circle_crop, pdf_builder  # noqa: E402
 
 
 OUT_DIR = ROOT / "scripts" / "_out"
@@ -42,11 +42,7 @@ def main() -> None:
         _make_test_image("D", (220, 120, 30)),
         _make_test_image("E", (110, 40, 180)),
     ]
-    processed = []
-    for img in test_images:
-        enhanced = upscale.enhance_image(img, level="balanced")
-        circular = circle_crop.auto(enhanced)
-        processed.append(circular)
+    processed = [circle_crop.auto(img) for img in test_images]
 
     for size_key in ("38", "44", "58"):
         out = OUT_DIR / f"test_{size_key}.pdf"

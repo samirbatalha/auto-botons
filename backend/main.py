@@ -17,7 +17,7 @@ MAX_INPUT_SIDE_PX = 1800
 from . import storage
 from .config import BUTTON_SIZES
 from .models.schemas import GeneratePdfRequest, ProcessedImage, RecropRequest
-from .pipeline import circle_crop, pdf_builder, upscale
+from .pipeline import circle_crop, pdf_builder
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -55,12 +55,8 @@ def sizes() -> dict[str, dict]:
 @app.post("/api/process", response_model=list[ProcessedImage])
 async def process_images(
     files: Annotated[list[UploadFile], File()],
-    level: Annotated[str, Form()] = "balanced",
 ) -> list[ProcessedImage]:
-    """Recebe N imagens, melhora qualidade + recorte circular automático.
-
-    Retorna lista de previews (com IDs) que o frontend usa para montar o grid.
-    """
+    """Recebe N imagens, faz crop circular centrado. Ajuste fino via /api/recrop."""
     if not files:
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
 
@@ -79,10 +75,9 @@ async def process_images(
             continue
 
         try:
-            enhanced = upscale.enhance_image(img, provider="classic", level=level)
-            circular = circle_crop.auto(enhanced)
+            circular = circle_crop.auto(img)
         except Exception as e:
-            errors.append(f"{f.filename}: falha no processamento ({type(e).__name__}: {e})")
+            errors.append(f"{f.filename}: falha no recorte ({type(e).__name__}: {e})")
             continue
 
         normalized_buf = BytesIO()
@@ -130,8 +125,7 @@ def recrop(req: RecropRequest) -> ProcessedImage:
     img.thumbnail((MAX_INPUT_SIDE_PX, MAX_INPUT_SIDE_PX), Image.LANCZOS)
 
     try:
-        enhanced = upscale.enhance_image(img, provider="classic")
-        recropped = circle_crop.manual(enhanced, req.crop)
+        recropped = circle_crop.manual(img, req.crop)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha no recorte ({type(e).__name__}: {e})")
 
